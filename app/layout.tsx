@@ -28,6 +28,9 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
     type: "website",
   },
+  other: {
+    "google-site-verification": "C8UsxmAD2h9HvMTAHzztH_CnotDUcEc23MbYYGlmDg0",
+  },
 };
 
 export default function RootLayout({
