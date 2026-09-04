@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { dbGet } from "@/lib/db";
 
 interface DbServer {
   id: string;
@@ -56,19 +56,7 @@ export async function GET(
       );
     }
 
-    let db;
-    try {
-      db = getDb();
-    } catch {
-      return NextResponse.json(
-        { error: "Database not synced. Run `npm run sync` first." },
-        { status: 503 }
-      );
-    }
-
-    const server = db
-      .prepare("SELECT * FROM servers WHERE id = ?")
-      .get(id) as DbServer | undefined;
+    const server = await dbGet("SELECT * FROM servers WHERE id = ?", [id]) as DbServer | undefined;
 
     if (!server) {
       return NextResponse.json(

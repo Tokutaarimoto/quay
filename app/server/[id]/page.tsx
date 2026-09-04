@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getDb } from "@/lib/db";
+import { dbGet } from "@/lib/db";
 import { McpServer } from "@/types/server";
 import { CodeBlock } from "@/components/CodeBlock";
 import { CopyButton } from "@/components/CopyButton";
@@ -144,11 +144,10 @@ function getCategoryLabel(category: string) {
   return labels[category] || category;
 }
 
-export function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id);
   try {
-    const db = getDb();
-    const server = db.prepare("SELECT * FROM servers WHERE id = ?").get(id) as DbServer | undefined;
+    const server = await dbGet("SELECT * FROM servers WHERE id = ?", [id]) as DbServer | undefined;
     if (!server) {
       return { title: "Server Not Found — Quay" };
     }
@@ -165,19 +164,10 @@ export function generateMetadata({ params }: { params: { id: string } }) {
   }
 }
 
-export default function ServerPage({ params }: { params: { id: string } }) {
+export default async function ServerPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id);
 
-  let db;
-  try {
-    db = getDb();
-  } catch {
-    notFound();
-  }
-
-  const serverRow = db
-    .prepare("SELECT * FROM servers WHERE id = ?")
-    .get(id) as DbServer | undefined;
+  const serverRow = await dbGet("SELECT * FROM servers WHERE id = ?", [id]) as DbServer | undefined;
 
   if (!serverRow) {
     notFound();

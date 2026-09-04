@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { dbAll, dbGet, dbRun } from "@/lib/db";
 
 export async function GET(
   req: NextRequest,
@@ -8,33 +8,21 @@ export async function GET(
   try {
     const serverId = decodeURIComponent(params.id);
 
-    let db;
-    try {
-      db = getDb();
-    } catch {
-      return NextResponse.json(
-        { error: "Database not synced." },
-        { status: 503 }
-      );
-    }
+    const reviews = await dbAll(
+      "SELECT * FROM reviews WHERE server_id = ? ORDER BY created_at DESC",
+      [serverId]
+    );
 
-    const reviews = db
-      .prepare(
-        "SELECT * FROM reviews WHERE server_id = ? ORDER BY created_at DESC"
-      )
-      .all(serverId);
-
-    const stats = db
-      .prepare(
-        "SELECT COUNT(*) as count, AVG(rating) as avgRating FROM reviews WHERE server_id = ?"
-      )
-      .get(serverId) as { count: number; avgRating: number | null };
+    const stats = await dbGet(
+      "SELECT COUNT(*) as count, AVG(rating) as avgRating FROM reviews WHERE server_id = ?",
+      [serverId]
+    ) as { count: number; avgRating: number | null } | undefined;
 
     return NextResponse.json({
       reviews,
       stats: {
-        count: stats.count,
-        avgRating: stats.avgRating ? Math.round(stats.avgRating * 10) / 10 : null,
+        count: stats?.count || 0,
+        avgRating: stats?.avgRating ? Math.round(stats.avgRating * 10) / 10 : null,
       },
     });
   } catch (error) {
@@ -69,28 +57,10 @@ export async function POST(
       );
     }
 
-    let db;
-    try {
-      db = getDb();
-    } catch {
-      return NextResponse.json(
-        { error: "Database not synced." },
-        { status: 503 }
-      );
-    }
-
-    const result = db
-      .prepare(
-        "INSERT INTO reviews (server_id, rating, title, content, author, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-      )
-      .run(
-        serverId,
-        rating,
-        title || null,
-        content || null,
-        author,
-        new Date().toISOString()
-      );
+    const result = await dbRun(
+      "INSERT INTO reviews (server_id, rating, title, content, author, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [serverId, rating, title || null, content || null, author, new Date().toISOString()]
+    );
 
     return NextResponse.json({
       id: result.lastInsertRowid,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getLastSynced } from "@/lib/db";
+import { dbAll, dbGet, getLastSynced } from "@/lib/db";
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 60;
@@ -105,16 +105,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    let db;
-    try {
-      db = getDb();
-    } catch {
-      return NextResponse.json(
-        { error: "Database not synced. Run `npm run sync` first." },
-        { status: 503 }
-      );
-    }
-
     const { searchParams } = new URL(req.url);
 
     const search = searchParams.get("search");
@@ -197,28 +187,28 @@ export async function GET(req: NextRequest) {
         ? "published_at"
         : "updated_at";
 
-    const countResult = db
-      .prepare(`SELECT COUNT(*) as total FROM servers ${whereClause}`)
-      .get(...params) as { total: number };
+    const countResult = await dbGet(
+      `SELECT COUNT(*) as total FROM servers ${whereClause}`,
+      params
+    );
 
-    const total = countResult.total;
+    const total = (countResult?.total as number) || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    const servers = db
-      .prepare(
-        `SELECT * FROM servers ${whereClause} ORDER BY ${sortColumn} ${order} LIMIT ? OFFSET ?`
-      )
-      .all(...params, limit, offset) as DbServer[];
+    const servers = await dbAll(
+      `SELECT * FROM servers ${whereClause} ORDER BY ${sortColumn} ${order} LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
 
     return NextResponse.json(
       {
-        servers: servers.map(mapServer),
+        servers: servers.map((s) => mapServer(s as unknown as DbServer)),
         total,
         page,
         limit,
         totalPages,
-        lastSynced: getLastSynced(),
+        lastSynced: await getLastSynced(),
       },
       {
         headers: {

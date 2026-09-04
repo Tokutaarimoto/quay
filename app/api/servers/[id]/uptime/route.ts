@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { dbAll, dbGet } from "@/lib/db";
 
 export async function GET(
   req: NextRequest,
@@ -8,50 +8,38 @@ export async function GET(
   try {
     const serverId = decodeURIComponent(params.id);
 
-    let db;
-    try {
-      db = getDb();
-    } catch {
-      return NextResponse.json(
-        { error: "Database not synced." },
-        { status: 503 }
-      );
-    }
+    const checks = await dbAll(
+      "SELECT * FROM uptime_checks WHERE server_id = ? ORDER BY checked_at DESC LIMIT 100",
+      [serverId]
+    );
 
-    const checks = db
-      .prepare(
-        "SELECT * FROM uptime_checks WHERE server_id = ? ORDER BY checked_at DESC LIMIT 100"
-      )
-      .all(serverId);
-
-    const stats = db
-      .prepare(
-        `SELECT 
-          COUNT(*) as totalChecks,
-          SUM(CASE WHEN status = 'online' THEN 1 ELSE 0 END) as onlineChecks,
-          AVG(response_time) as avgResponseTime
-        FROM uptime_checks 
-        WHERE server_id = ?`
-      )
-      .get(serverId) as {
+    const stats = await dbGet(
+      `SELECT 
+        COUNT(*) as totalChecks,
+        SUM(CASE WHEN status = 'online' THEN 1 ELSE 0 END) as onlineChecks,
+        AVG(response_time) as avgResponseTime
+      FROM uptime_checks 
+      WHERE server_id = ?`,
+      [serverId]
+    ) as {
       totalChecks: number;
       onlineChecks: number;
       avgResponseTime: number | null;
-    };
+    } | undefined;
 
     const uptime =
-      stats.totalChecks > 0
-        ? Math.round((stats.onlineChecks / stats.totalChecks) * 100)
+      stats && stats.totalChecks > 0
+        ? Math.round(((stats.onlineChecks || 0) / stats.totalChecks) * 100)
         : null;
 
     return NextResponse.json({
       checks,
       stats: {
         uptime,
-        avgResponseTime: stats.avgResponseTime
+        avgResponseTime: stats?.avgResponseTime
           ? Math.round(stats.avgResponseTime)
           : null,
-        totalChecks: stats.totalChecks,
+        totalChecks: stats?.totalChecks || 0,
       },
     });
   } catch (error) {
